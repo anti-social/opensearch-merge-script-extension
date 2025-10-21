@@ -1,6 +1,6 @@
-package dev.evo.elasticsearch.script;
+package dev.evo.opensearch.script;
 
-import org.elasticsearch.common.document.DocumentField;
+import org.opensearch.common.document.DocumentField;
 
 public final class DocumentFieldExt {
     public static <V> V getValueOrDefault(DocumentField hit, V defaultValue) {

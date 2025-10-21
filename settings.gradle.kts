@@ -1,1 +1,1 @@
-rootProject.name = "merge-script"
+rootProject.name = "opensearch-merge-script-extension"

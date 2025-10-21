@@ -5,16 +5,16 @@ on:
     branches:
     - '**'
     tags:
-    - 'v*-es*'
+    - 'v*'
   pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: anti-social/elasticsearch-plugin-github-action/build@v1.0.5
+    - uses: anti-social/elasticsearch-plugin-github-action/build@v1.0.9
       with:
-        es-version: '7.9'
+        os-version: '3.3'
 
   release:
     runs-on: ubuntu-latest
@@ -26,4 +26,4 @@ jobs:
     permissions:
       contents: write
     steps:
-    - uses: anti-social/elasticsearch-plugin-github-action/release@v1.0.5
+    - uses: anti-social/elasticsearch-plugin-github-action/release@v1.0.9

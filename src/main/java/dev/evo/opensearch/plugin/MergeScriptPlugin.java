@@ -1,29 +1,27 @@
-package dev.evo.elasticsearch.plugin;
+package dev.evo.opensearch.plugin;
 
-import dev.evo.elasticsearch.MergeScriptExtBuilder;
-import dev.evo.elasticsearch.MergeScriptFilter;
-import dev.evo.elasticsearch.script.MergeScript;
-import org.elasticsearch.action.support.ActionFilter;
-import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.NamedXContentRegistry;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.env.NodeEnvironment;
-import org.elasticsearch.painless.spi.Whitelist;
-import org.elasticsearch.painless.spi.WhitelistLoader;
-import org.elasticsearch.plugins.ActionPlugin;
-import org.elasticsearch.plugins.Plugin;
-import org.elasticsearch.plugins.ScriptPlugin;
-import org.elasticsearch.plugins.SearchPlugin;
-import org.elasticsearch.repositories.RepositoriesService;
-import org.elasticsearch.script.ScriptContext;
-import org.elasticsearch.script.ScriptEngine;
-import org.elasticsearch.script.ScriptService;
-import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.watcher.ResourceWatcherService;
+import dev.evo.opensearch.MergeScriptExtBuilder;
+import dev.evo.opensearch.MergeScriptFilter;
+import dev.evo.opensearch.script.MergeScript;
+import org.opensearch.action.support.ActionFilter;
+import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.env.Environment;
+import org.opensearch.env.NodeEnvironment;
+import org.opensearch.plugins.ActionPlugin;
+import org.opensearch.plugins.Plugin;
+import org.opensearch.plugins.ScriptPlugin;
+import org.opensearch.plugins.SearchPlugin;
+import org.opensearch.repositories.RepositoriesService;
+import org.opensearch.script.ScriptContext;
+import org.opensearch.script.ScriptEngine;
+import org.opensearch.script.ScriptService;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
+import org.opensearch.watcher.ResourceWatcherService;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -54,6 +52,14 @@ public class MergeScriptPlugin extends Plugin
             NamedWriteableRegistry namedWriteableRegistry,
             IndexNameExpressionResolver indexNameExpressionResolver,
             Supplier<RepositoriesService> repositoriesServiceSupplier) {
+        System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        System.out.println(">>> createComponents");
+        for (var l : scriptService.getScriptLanguages().languageContexts.keySet()) {
+            System.out.println(l);
+        }
+        System.out.println(scriptService.isLangSupported("painless"));
+        System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        new Exception().printStackTrace();
         this.scriptService = scriptService;
         return Collections.emptyList();
     }

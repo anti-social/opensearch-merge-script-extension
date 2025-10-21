@@ -1,14 +1,15 @@
-package dev.evo.elasticsearch;
+package dev.evo.opensearch;
 
-import org.elasticsearch.common.ParseField;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
-import org.elasticsearch.common.xcontent.ConstructingObjectParser;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.script.Script;
-import org.elasticsearch.search.SearchExtBuilder;
+import org.opensearch.core.ParseField;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.xcontent.ConstructingObjectParser;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.script.Script;
+import org.opensearch.search.SearchExtBuilder;
 
 import java.io.IOException;
 import java.util.List;
@@ -44,7 +45,7 @@ public class MergeScriptExtBuilder extends SearchExtBuilder {
     private int windowSize = DEFAULT_WINDOW_SIZE;
     private boolean pagination = DEFAULT_PAGINATION;
 
-    public static class MergeScript implements Writeable {
+    public static class MergeScript implements Writeable, ToXContent {
         public final Script script;
         public final List<String> fields;
 
@@ -86,6 +87,20 @@ public class MergeScriptExtBuilder extends SearchExtBuilder {
         public void writeTo(StreamOutput out) throws IOException {
             script.writeTo(out);
             out.writeOptionalStringCollection(fields);
+        }
+
+        @Override
+        public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+            builder.field(SCRIPT_FIELD.getPreferredName());
+            script.toXContent(builder, params);
+
+            builder.startArray(FIELDS_FIELD.getPreferredName());
+            for (var field : fields) {
+                builder.value(field);
+            }
+            builder.endArray();
+
+            return builder;
         }
     }
 
@@ -142,7 +157,9 @@ public class MergeScriptExtBuilder extends SearchExtBuilder {
         builder.startObject(NAME);
         builder.field(WINDOW_SIZE_FIELD_NAME.getPreferredName(), windowSize);
         builder.field(PAGINATION_FIELD_NAME.getPreferredName(), pagination);
-        builder.field(MERGE_SCRIPT_FIELD.getPreferredName(), mergeScript);
+        builder.startObject(MERGE_SCRIPT_FIELD.getPreferredName());
+        mergeScript.toXContent(builder, params);
+        builder.endObject();
         builder.endObject();
         return builder;
     }

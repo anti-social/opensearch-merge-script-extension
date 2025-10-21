@@ -1,81 +1,87 @@
-package dev.evo.elasticsearch.rescore;
+package dev.evo.opensearch;
 
-import dev.evo.elasticsearch.MergeScriptExtBuilder;
-import org.elasticsearch.action.search.SearchRequestBuilder;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilders;
-import org.elasticsearch.rest.RestStatus;
-import org.elasticsearch.script.Script;
-import org.elasticsearch.script.ScriptType;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
-import org.elasticsearch.test.ESIntegTestCase;
-
+import dev.evo.opensearch.plugin.MergeScriptPlugin;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.opensearch.action.search.SearchRequestBuilder;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.client.Request;
+import org.opensearch.client.Response;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.functionscore.ScoreFunctionBuilders;
+import org.opensearch.plugins.Plugin;
+import org.opensearch.script.Script;
+import org.opensearch.script.ScriptType;
+import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.test.OpenSearchIntegTestCase;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import static org.elasticsearch.cluster.metadata.IndexMetadata.SETTING_NUMBER_OF_SHARDS;
-import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertHitCount;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertOrderedSearchHits;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertRequestBuilderThrows;
+import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_NUMBER_OF_SHARDS;
+import static org.opensearch.common.xcontent.XContentFactory.jsonBuilder;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertHitCount;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertOrderedSearchHits;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertRequestBuilderThrows;
 
-@ESIntegTestCase.ClusterScope(scope = ESIntegTestCase.Scope.SUITE)
-public class MergeScriptExtFilterIT extends ESIntegTestCase {
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE)
+public class MergeScriptExtFilterIT extends OpenSearchIntegTestCase {
     private final static int NUMBER_OF_SHARDS = 2;
 
-    public void testEmpty() throws IOException {
+    public void testEmpty() throws Exception {
         createIndex(NUMBER_OF_SHARDS);
 
-        var resp = rescoreSearchRequest().get();
+        var resp = rescoreSearchRequest();
         assertHitCount(resp, 0);
     }
 
-    public void testMergeScript() throws IOException {
+    public void testMergeScript() throws Exception {
         createIndex(NUMBER_OF_SHARDS);
         populateIndex();
 
-        var resp = rescoreSearchRequest().get();
+        var resp = rescoreSearchRequest();
         assertHitCount(resp, 6);
         assertOrderedSearchHits(resp, "103", "101", "301", "201", "304", "204");
     }
 
-    public void testMergeScriptWithPagination() throws IOException {
+    public void testMergeScriptWithPagination() throws Exception {
         createIndex(NUMBER_OF_SHARDS);
         populateIndex();
 
-        var resp = rescoreSearchRequest(10_000, true, 2, 3).get();
+        var resp = rescoreSearchRequest(10_000, true, 2, 3);
         assertHitCount(resp, 6);
         assertOrderedSearchHits(resp, "301", "201", "304");
     }
 
-    public void testMergeScriptWithPaginationOverflow() throws IOException {
+    public void testMergeScriptWithPaginationOverflow() throws Exception {
         createIndex(NUMBER_OF_SHARDS);
         populateIndex();
 
-        var resp = rescoreSearchRequest(10_000, true, 7, 3).get();
+        var resp = rescoreSearchRequest(10_000, true, 7, 3);
         assertHitCount(resp, 6);
         assertOrderedSearchHits(resp);
     }
 
-    public void testMergeScriptWithoutPagination() throws IOException {
+    public void testMergeScriptWithoutPagination() throws Exception {
         createIndex(NUMBER_OF_SHARDS);
         populateIndex();
 
-        var resp = rescoreSearchRequest(10_000, false, 2, 3).get();
+        var resp = rescoreSearchRequest(10_000, false, 2, 3);
         assertHitCount(resp, 6);
         assertOrderedSearchHits(resp, "103", "101", "301", "201", "304", "204");
     }
 
-    private SearchRequestBuilder rescoreSearchRequest() {
+    private SearchResponse rescoreSearchRequest() throws Exception {
         return rescoreSearchRequest(10_000, true, 0, 10);
     }
 
-    private SearchRequestBuilder rescoreSearchRequest(
+    private SearchResponse rescoreSearchRequest(
         int windowSize, boolean pagination, int from, int size
-    ) {
+    ) throws Exception {
         return rescoreSearchRequest(
             windowSize,
             pagination,
@@ -123,68 +129,73 @@ public class MergeScriptExtFilterIT extends ESIntegTestCase {
         );
     }
 
-    private SearchRequestBuilder rescoreSearchRequest(
+    private SearchResponse rescoreSearchRequest(
         int windowSize,
         boolean pagination,
         int from,
         int size,
         MergeScriptExtBuilder.MergeScript mergeScript
-    ) {
-        return client().prepareSearch()
-            .setSource(
-                SearchSourceBuilder.searchSource()
-                    .from(from)
-                    .size(size)
-                    .query(
-                        QueryBuilders.functionScoreQuery(
-                            ScoreFunctionBuilders.scriptFunction(
-                                new Script(
-                                    "return doc['rank'].size() > 0 ? doc['rank'].value : 0.0;"
-                                )
-                            )
+    ) throws Exception {
+        var searchRequest = new Request("GET", "/test/_search");
+        var searchQuery = SearchSourceBuilder.searchSource()
+            .from(from)
+            .size(size)
+            .query(
+                QueryBuilders.functionScoreQuery(
+                    ScoreFunctionBuilders.scriptFunction(
+                        new Script(
+                            "return doc['rank'].size() > 0 ? doc['rank'].value : 0.0;"
                         )
                     )
-                    .ext(
-                        List.of(
-                            new MergeScriptExtBuilder(mergeScript)
-                                .windowSize(windowSize)
-                                .pagination(pagination)
-                        )
-                    )
+                )
+            )
+            .ext(
+                List.of(
+                    new MergeScriptExtBuilder(mergeScript)
+                        .windowSize(windowSize)
+                        .pagination(pagination)
+                )
             );
+        var json = jsonBuilder();
+        searchQuery.toXContent(json, ToXContent.EMPTY_PARAMS);
+        searchRequest.setJsonEntity(json.toString());
+
+        var response = getRestClient().performRequest(searchRequest);
+        var parser = createParser(JsonXContent.jsonXContent, EntityUtils.toString(response.getEntity()));
+        return SearchResponse.fromXContent(parser);
     }
 
     private void createIndex(int numShards) throws IOException {
         assertAcked(
             prepareCreate("test")
                 .setSettings(Settings.builder().put(SETTING_NUMBER_OF_SHARDS, numShards))
-                .addMapping("product",
+                .setMapping(
                     jsonBuilder()
                         .startObject()
-                          .startObject("product")
-                            .startObject("properties")
-                              .startObject("name")
-                                .field("type", "text")
-                                .field("analyzer", "whitespace")
-                              .endObject()
-                              .startObject("company_id")
-                                .field("type", "integer")
-                              .endObject()
-                              .startObject("rank")
-                                .field("type", "float")
-                              .endObject()
-                              .startObject("is_turbo")
-                                .field("type", "boolean")
-                              .endObject()
+                          .startObject("properties")
+                            .startObject("name")
+                              .field("type", "text")
+                              .field("analyzer", "whitespace")
+                            .endObject()
+                            .startObject("company_id")
+                              .field("type", "integer")
+                            .endObject()
+                            .startObject("rank")
+                              .field("type", "float")
+                            .endObject()
+                            .startObject("is_turbo")
+                              .field("type", "boolean")
                             .endObject()
                           .endObject()
-                        .endObject())
+                        .endObject()
+                )
         );
         ensureYellow();
     }
 
     private void populateIndex() throws IOException {
-        client().prepareIndex("test", "product", "101")
+        client().prepareIndex("test")
+            .setId("101")
             .setSource(
                 "name", "the quick brown fox",
                 "company_id", 1,
@@ -192,7 +203,8 @@ public class MergeScriptExtFilterIT extends ESIntegTestCase {
                 "is_turbo", false
             )
             .get();
-        client().prepareIndex("test", "product", "103")
+        client().prepareIndex("test")
+            .setId("103")
             .setSource(
                 "name", "quick huge brown fox",
                 "company_id", 1,
@@ -213,7 +225,8 @@ public class MergeScriptExtFilterIT extends ESIntegTestCase {
         1
         );
 
-        client().prepareIndex("test", "product", "201")
+        client().prepareIndex("test")
+            .setId("201")
             .setSource(
                 "name", "the quick lazy huge fox jumps over the tree",
                 "company_id", 2,
@@ -221,7 +234,8 @@ public class MergeScriptExtFilterIT extends ESIntegTestCase {
                 "is_turbo", true
             )
             .get();
-        client().prepareIndex("test", "product", "204")
+        client().prepareIndex("test")
+            .setId("204")
             .setSource(
                 "name", "the brother of the quick lazy fox",
                 "company_id", 2,
@@ -241,13 +255,15 @@ public class MergeScriptExtFilterIT extends ESIntegTestCase {
             1
         );
 
-        client().prepareIndex("test", "product", "301")
+        client().prepareIndex("test")
+            .setId("301")
             .setSource(
                 "name", "the quick lonely fox",
                 "rank", 1.0
             )
             .get();
-        client().prepareIndex("test", "product", "304")
+        client().prepareIndex("test")
+            .setId("304")
             .setSource(
                 "name", "another lonely fox",
                 "rank", 0.8,

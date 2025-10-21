@@ -1,10 +1,10 @@
-package dev.evo.elasticsearch.script;
+package dev.evo.opensearch.script;
 
-import org.elasticsearch.index.fielddata.ScriptDocValues;
-import org.elasticsearch.script.DynamicMap;
-import org.elasticsearch.script.ScriptContext;
-import org.elasticsearch.script.ScriptFactory;
-import org.elasticsearch.search.SearchHit;
+import org.opensearch.index.fielddata.ScriptDocValues;
+import org.opensearch.script.DynamicMap;
+import org.opensearch.script.ScriptContext;
+import org.opensearch.script.ScriptFactory;
+import org.opensearch.search.SearchHit;
 
 import java.util.Arrays;
 import java.util.List;

@@ -1,0 +1,28 @@
+class dev.evo.opensearch.script.DocumentFieldExt @no_import {
+}
+
+class org.opensearch.common.document.DocumentField {
+    String getName()
+    Object getValue()
+    List getValues()
+
+    Long dev.evo.opensearch.script.DocumentFieldExt longValue()
+    long dev.evo.opensearch.script.DocumentFieldExt longValueOrDefault(long)
+    Integer dev.evo.opensearch.script.DocumentFieldExt intValue()
+    int dev.evo.opensearch.script.DocumentFieldExt intValueOrDefault(int)
+    Double dev.evo.opensearch.script.DocumentFieldExt doubleValue()
+    double dev.evo.opensearch.script.DocumentFieldExt doubleValueOrDefault(double)
+    Float dev.evo.opensearch.script.DocumentFieldExt floatValue()
+    float dev.evo.opensearch.script.DocumentFieldExt floatValueOrDefault(float)
+    Boolean dev.evo.opensearch.script.DocumentFieldExt booleanValue()
+    boolean dev.evo.opensearch.script.DocumentFieldExt booleanValueOrDefault(boolean)
+    String dev.evo.opensearch.script.DocumentFieldExt stringValue()
+    String dev.evo.opensearch.script.DocumentFieldExt stringValueOrDefault(String)
+}
+
+class org.opensearch.search.SearchHit {
+    String getId()
+    float getScore()
+    DocumentField field(String)
+    java.util.Map getFields()
+}
