@@ -93,31 +93,39 @@ public class MergeScriptExtFilterIT extends OpenSearchIntegTestCase {
                     "painless",
                     """
                         SearchHit[] mixedHits = new SearchHit[hits.length];
-                        List commonHits = new ArrayList();
-                        List turboHits = new ArrayList();
-                        for (SearchHit hit : hits) {
-                            def isTurbo = hit.field("is_turbo").booleanValueOrDefault(false) ||
-                                hit.field("rank").floatValueOrDefault(0.0F) > 2.0F;
-                            if (isTurbo) {
-                                turboHits.add(hit);
+                        ArrayDeque delayedCommonHits = new ArrayDeque();
+                        ArrayDeque delayedTurboHits = new ArrayDeque();
+                        int hitIx = 0;
+                        int mixedIx = 0;
+                        boolean isTurboExpected = false;
+                        while (mixedIx < hits.length) {
+                            ArrayDeque expectedHits = isTurboExpected ? delayedTurboHits : delayedCommonHits;
+                            ArrayDeque otherHits = isTurboExpected ? delayedCommonHits : delayedTurboHits;
+                            SearchHit nextHit = null;
+                            if (!expectedHits.isEmpty()) {
+                                nextHit = expectedHits.removeFirst();
                             } else {
-                                commonHits.add(hit);
-                            }
-                        }
-                        List hitsIterators = new ArrayList();
-                        hitsIterators.add(commonHits.iterator());
-                        hitsIterators.add(turboHits.iterator());
-                        int i = 0;
-                        while (!hitsIterators.isEmpty()) {
-                            ListIterator hitsIteratorsIter = hitsIterators.listIterator();
-                            while (hitsIteratorsIter.hasNext()) {
-                                Iterator hitsIter = hitsIteratorsIter.next();
-                                if (hitsIter.hasNext()) {
-                                    mixedHits[i++] = hitsIter.next();
-                                } else {
-                                    hitsIteratorsIter.remove();
+                                // Pull hits until one of the expected kind is found,
+                                // delaying hits of the other kind
+                                while (hitIx < hits.length) {
+                                    SearchHit hit = hits[hitIx++];
+                                    boolean isTurbo = hit.field("is_turbo").booleanValueOrDefault(false) ||
+                                        hit.field("rank").floatValueOrDefault(0.0F) > 2.0F;
+                                    if (isTurbo == isTurboExpected) {
+                                        nextHit = hit;
+                                        break;
+                                    }
+                                    otherHits.addLast(hit);
                                 }
-
+                            }
+                            if (nextHit == null) {
+                                // No more hits of the expected kind, drain the rest
+                                while (!otherHits.isEmpty()) {
+                                    mixedHits[mixedIx++] = otherHits.removeFirst();
+                                }
+                            } else {
+                                mixedHits[mixedIx++] = nextHit;
+                                isTurboExpected = !isTurboExpected;
                             }
                         }
                         return mixedHits;

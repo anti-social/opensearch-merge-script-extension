@@ -1,3 +1,4 @@
+import org.opensearch.gradle.testclusters.OpenSearchCluster
 import org.opensearch.gradle.testclusters.TestDistribution
 
 plugins {
@@ -24,6 +25,18 @@ configureOpensearchPlugin(
     // https://github.com/opensearch-project/OpenSearch/issues/18787
     opensearchCompatibility = OpensearchCompatibility.REVISION,
 )
+
+// Testclusters run CLI tools (bin/opensearch-plugin) with a cleared environment.
+// On NixOS bash has no compiled-in default PATH, so the tools fail with
+// "dirname: command not found". Opt in to passing the current PATH through
+// (set by shell.nix): https://github.com/opensearch-project/OpenSearch/pull/13689
+if (providers.gradleProperty("testClustersPassPath").orNull.toBoolean()) {
+    configure<NamedDomainObjectContainer<OpenSearchCluster>> {
+        configureEach {
+            System.getenv("PATH")?.let { environment("PATH", it) }
+        }
+    }
+}
 
 // extraConfiguration()
 
