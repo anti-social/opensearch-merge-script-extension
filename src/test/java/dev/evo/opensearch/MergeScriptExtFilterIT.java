@@ -6,6 +6,7 @@ import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
+import org.opensearch.common.lucene.search.function.CombineFunction;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.xcontent.ToXContent;
@@ -73,6 +74,108 @@ public class MergeScriptExtFilterIT extends OpenSearchIntegTestCase {
         var resp = rescoreSearchRequest(10_000, false, 2, 3);
         assertHitCount(resp, 6);
         assertOrderedSearchHits(resp, "103", "101", "301", "201", "304", "204");
+    }
+
+    public void testMatchedQueries() throws Exception {
+        createIndex(NUMBER_OF_SHARDS);
+        populateIndex();
+
+        var resp = matchedQueriesSearchRequest(
+            false,
+            """
+                boolean isTurbo = false;
+                for (String name : hit.getMatchedQueries()) {
+                    if (name == "turbo") {
+                        isTurbo = true;
+                    }
+                }
+                return isTurbo;
+            """
+        );
+        assertHitCount(resp, 6);
+        assertOrderedSearchHits(resp, "201", "304", "204", "101", "103", "301");
+    }
+
+    public void testMatchedQueryScore() throws Exception {
+        createIndex(NUMBER_OF_SHARDS);
+        populateIndex();
+
+        var resp = matchedQueriesSearchRequest(
+            true,
+            "return hit.getMatchedQueryScore(\"turbo\") != null;"
+        );
+        assertHitCount(resp, 6);
+        assertOrderedSearchHits(resp, "201", "304", "204", "101", "103", "301");
+    }
+
+    public void testMatchedQueriesAndScores() throws Exception {
+        createIndex(NUMBER_OF_SHARDS);
+        populateIndex();
+
+        var resp = matchedQueriesSearchRequest(
+            true,
+            """
+                Map matched = hit.getMatchedQueriesAndScores();
+                return matched.containsKey("turbo") && !matched.containsKey("company");
+            """
+        );
+        assertHitCount(resp, 6);
+        assertOrderedSearchHits(resp, "304", "101", "103", "201", "301", "204");
+    }
+
+    /**
+     * Moves hits for which {@code isTurboSource} returns {@code true} to the top,
+     * preserving the original order inside both groups.
+     * Hits are sorted by rank: 101, 103, 201, 301, 304, 204.
+     */
+    private SearchResponse matchedQueriesSearchRequest(
+        boolean includeNamedQueriesScores, String isTurboSource
+    ) throws Exception {
+        var mergeScript = new MergeScriptExtBuilder.MergeScript(
+            new Script(
+                ScriptType.INLINE,
+                "painless",
+                """
+                    boolean isTurbo(SearchHit hit) {
+                    %s
+                    }
+                    SearchHit[] mixedHits = new SearchHit[hits.length];
+                    int mixedIx = 0;
+                    for (SearchHit hit : hits) {
+                        if (isTurbo(hit)) {
+                            mixedHits[mixedIx++] = hit;
+                        }
+                    }
+                    for (SearchHit hit : hits) {
+                        if (!isTurbo(hit)) {
+                            mixedHits[mixedIx++] = hit;
+                        }
+                    }
+                    return mixedHits;
+                """.formatted(isTurboSource),
+                Collections.emptyMap()
+            ),
+            List.of()
+        );
+        var searchQuery = SearchSourceBuilder.searchSource()
+            .size(10)
+            .includeNamedQueriesScores(includeNamedQueriesScores)
+            .query(
+                QueryBuilders.functionScoreQuery(
+                    QueryBuilders.boolQuery()
+                        .must(QueryBuilders.matchAllQuery())
+                        .should(QueryBuilders.termQuery("is_turbo", true).queryName("turbo"))
+                        .should(QueryBuilders.existsQuery("company_id").queryName("company")),
+                    ScoreFunctionBuilders.scriptFunction(
+                        new Script(
+                            "return doc['rank'].size() > 0 ? doc['rank'].value : 0.0;"
+                        )
+                    )
+                )
+                    .boostMode(CombineFunction.REPLACE)
+            )
+            .ext(List.of(new MergeScriptExtBuilder(mergeScript)));
+        return search(searchQuery);
     }
 
     private SearchResponse rescoreSearchRequest() throws Exception {
@@ -144,7 +247,6 @@ public class MergeScriptExtFilterIT extends OpenSearchIntegTestCase {
         int size,
         MergeScriptExtBuilder.MergeScript mergeScript
     ) throws Exception {
-        var searchRequest = new Request("GET", "/test/_search");
         var searchQuery = SearchSourceBuilder.searchSource()
             .from(from)
             .size(size)
@@ -164,6 +266,11 @@ public class MergeScriptExtFilterIT extends OpenSearchIntegTestCase {
                         .pagination(pagination)
                 )
             );
+        return search(searchQuery);
+    }
+
+    private SearchResponse search(SearchSourceBuilder searchQuery) throws Exception {
+        var searchRequest = new Request("GET", "/test/_search");
         var json = jsonBuilder();
         searchQuery.toXContent(json, ToXContent.EMPTY_PARAMS);
         searchRequest.setJsonEntity(json.toString());

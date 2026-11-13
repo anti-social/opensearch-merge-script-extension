@@ -25,4 +25,7 @@ class org.opensearch.search.SearchHit {
     float getScore()
     DocumentField field(String)
     java.util.Map getFields()
+    String[] getMatchedQueries()
+    Float getMatchedQueryScore(String)
+    java.util.Map getMatchedQueriesAndScores()
 }
